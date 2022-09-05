@@ -1,5 +1,7 @@
 from flask import Flask,jsonify
 import os
+from src.auth import auth
+from src.Tasks import tasks
 def create_app(test_config=None):
 
     app=Flask(__name__,instance_relative_config=True)
@@ -9,9 +11,7 @@ def create_app(test_config=None):
         )
     else:
         app.config.from_mapping(test_config)
-        @app.get("/hello")
-        def sayHello():
-            return jsonify({
-                "message":"Hello World"
-            })
+        app.register_blueprint(auth)
+        app.register_blueprint(tasks)
+        
     return app
