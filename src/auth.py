@@ -213,5 +213,40 @@ def delete_single_user(params):
 @jwt_required()
 
 def update_single_user(params):
-    pass
-         
+    try:
+        if validators.email(params):
+            user_to_update = User.query.filter_by(email=params)
+        else:
+            user_to_update = User.query.filter_by(username=params)
+            
+        if not user_to_update:
+            return jsonify({
+                "message":"The user with the given credential was not found"
+            })
+            
+        else:
+            username= request.get_json().get("username","")
+            email=request.get_json().get("email","")
+            role= request.get_json().get("role")
+            
+            if not validators.email(email):
+                return jsonify({
+                    "message":"Enter a valid Email"
+                }),400
+                
+            user_to_update.email=email
+            user_to_update.username=username
+            user_to_update.role=role
+            
+            User.session.commit()
+            
+            return jsonify({
+                "id":user_to_update.id,
+                "email":user_to_update.email,
+                'username':user_to_update.username
+            })
+    
+    except:
+        return jsonify({
+            "message":"There was an error while doing an update"
+        })
