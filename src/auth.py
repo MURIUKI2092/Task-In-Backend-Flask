@@ -2,7 +2,8 @@ from flask import Blueprint,request,jsonify
 from werkzeug.security import check_password_hash,generate_password_hash
 import re
 import validators
-from flask_jwt_extended import create_access_token,create_refresh_token
+from flask_login import login_required
+from flask_jwt_extended import create_access_token,create_refresh_token,jwt_required,get_jwt_identity
 from src.database import User,db
 regex = re.compile(r"([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|\"([]!#-[^-~ \t]|(\\[\t -~]))+\")@([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|\[[\t -Z^-~]*])")
 auth= Blueprint("auths",__name__,url_prefix="/api/v1/auth")
@@ -11,6 +12,7 @@ auth= Blueprint("auths",__name__,url_prefix="/api/v1/auth")
 def User_register():
     username= request.json["username"]
     email=request.json['email']
+    role=request.json.get("role"," ")
     password=request.json['password']
     
     if len(password)<6:
@@ -23,10 +25,11 @@ def User_register():
         return jsonify({
             "message":"username is too short"
         }),400
-    # if not username.isalnum() or " ":
-    #     return jsonify({
-    #         "message":"username should be alphanumeric"
-    #     }),400
+    if not role:
+        return jsonify({
+            "message":"The user role must be added while registering"
+        })
+   
         
     if not re.fullmatch(regex,email):
         return jsonify({
@@ -77,7 +80,7 @@ def User_login():
     
     if is_password_correct: # if password is correct
         refresh = create_refresh_token(identity=user.id) #create a refresh token
-        access = create_refresh_token(identity=user.id) #create an access token
+        access = create_access_token(identity=user.id) #create an access token
         
         
         return jsonify({ # return the user object
@@ -94,3 +97,121 @@ def User_login():
     }),401
     
     
+#get all the users if and only if you're an admin
+@auth.get("/users")
+
+# @jwt_required() #secure the route
+def get_all_users():
+    try:
+        return jsonify({
+            "users":User
+        })
+        
+    except:
+        return jsonify({
+            "message":"There was an error fetching your data from the database"
+        })
+     
+#get a single user by using either the email or the username   
+@auth.get('/users/<int:userId>')
+# @jwt_required()
+
+def get_single_user(userId):
+    try:
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        user = User.query.filter_by(id=userId).first()
+        print(user)
+        print(user)
+        if not user:
+            return jsonify({
+                "message":"The user with those credentials was not found"
+            })
+        else:
+            return jsonify({
+                "user":{
+                    'username':user.username,
+                    'email':user.email,
+                    'role':user.role
+                }
+            }),200
+            
+    except:
+        return jsonify({
+            "message":"There was an error querying your user"
+        }),400
+   
+
+#This method is for deleting all the users from the system
+#only the admin is required to do this task
+@auth.delete("/users/delete")
+@jwt_required()
+@login_required
+
+def delete_all_users():
+    current_user = get_jwt_identity()
+    if current_user.role =="Admin":
+        try:
+            
+            all_users_to_delete= User.query.all()
+            if  not all_users_to_delete:
+                return jsonify({
+                    "message":"There are no users present to perform this task"
+                })
+            else:
+                User.session.delete(all_users_to_delete)
+                User.session.commit()
+                
+                return jsonify ({}),204
+            
+        except:
+            return jsonify({
+                "message":"an error occurred while deleting all the user"
+            })
+    
+    else:
+        return jsonify({
+            "message":"You are not allowed to do that as you're not an admin"
+        })
+    
+@auth.delete("/users/delete/<params>")
+@jwt_required()
+@login_required
+
+def delete_single_user(params):
+    # current_user= get_jwt_identity()
+    # if current_user.role =="Admin":
+        try:
+            
+            if validators.email(params):
+                user_to_delete= User.query.filter_by(email=params)
+            else:
+                user_to_delete = User.query.filter_by(username=params)
+            if not user_to_delete:
+                return jsonify({
+                    "message":"The user with that parameter was not found"
+                }),404
+                
+            else:
+                User.session.delete(user_to_delete)
+                User.session.commit()
+                
+                return jsonify({}),204
+            
+        except:
+            return jsonify({
+                "message":"an error occurred during deleting the single user"
+            }),400
+    # else:
+    #     return jsonify({
+    #         "message":"You are not authorized to do that."
+    #     })
+            
+
+@auth.put("/user/update/<params>")
+@auth.patch("/users/update/<params>")  
+@login_required
+@jwt_required()
+
+def update_single_user(params):
+    pass
+         
